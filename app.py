@@ -35,10 +35,9 @@ volume_spike_factor = st.sidebar.slider("Volume Spike Factor", 1.5, 5.0, 2.0)
 
 # Function to calculate technical indicators
 def calculate_indicators(df):
-    """Calculate RSI, MACD, and other technical indicators"""
-    if df.empty:
+    if df is None or df.empty:
         return pd.DataFrame()
-    
+    """Calculate RSI, MACD, and other technical indicators"""
     # Calculate RSI
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
@@ -74,13 +73,16 @@ if st.button("🔍 Analyze Stocks") and stocks:
             status_text.text(f"Analyzing {symbol}...")
             
             df = yf.download(symbol, period="3mo", interval="1d", progress=False)
-            if df.empty:
+            if df is None or df.empty:
                 st.warning(f"No data found for {symbol}")
                 continue
 
             indicators = calculate_indicators(df)
-            if indicators.empty:
+            if indicators is None or indicators.empty:
                 st.warning(f"Indicators empty for {symbol}")
+                continue
+            if indicators.shape[0] == 0:
+                st.warning(f"Indicators DataFrame is empty for {symbol}")
                 continue
 
             latest = indicators.iloc[-1]
@@ -104,17 +106,26 @@ if st.button("🔍 Analyze Stocks") and stocks:
 
             try:
                 vol = float(latest['Volume'])
-                avg_vol = float(indicators['Volume'].rolling(5).mean().iloc[-1])
-                if vol > volume_spike_factor * avg_vol:
-                    alert += "🚨 Volume Spike\\n"
+                if 'Volume' in indicators and not indicators['Volume'].empty:
+                    rolling_mean = indicators['Volume'].rolling(5).mean()
+                    avg_vol = None
+                    if isinstance(rolling_mean, pd.Series):
+                        avg_vol = float(rolling_mean.iloc[-1])
+                    elif isinstance(rolling_mean, np.ndarray):
+                        avg_vol = float(rolling_mean[-1])
+                    elif isinstance(rolling_mean, (list, tuple)):
+                        avg_vol = float(rolling_mean[-1])
+                    # Only proceed if avg_vol is set and is a number
+                    if avg_vol is not None and vol > volume_spike_factor * avg_vol:
+                        alert += "🚨 Volume Spike\\n"
             except Exception as e:
                 st.error(f"Volume error for {symbol}: {e}")
 
             try:
                 macd_now = float(latest['MACD'])
-                macd_prev = float(indicators['MACD'].iloc[-2])
+                macd_prev = float(indicators['MACD'].iloc[-2]) if indicators.shape[0] > 1 else macd_now
                 signal_now = float(latest['Signal'])
-                signal_prev = float(indicators['Signal'].iloc[-2])
+                signal_prev = float(indicators['Signal'].iloc[-2]) if indicators.shape[0] > 1 else signal_now
                 if macd_now > signal_now and macd_prev < signal_prev:
                     alert += "✅ MACD Bullish Crossover\\n"
             except Exception as e:
@@ -123,10 +134,10 @@ if st.button("🔍 Analyze Stocks") and stocks:
             row = {
                 "Ticker": symbol,
                 "Price": round(float(latest['Close']), 2),
-                "RSI": round(rsi, 2),
-                "MACD": round(macd_now, 2),
-                "Signal": round(signal_now, 2),
-                "Volume": int(vol),
+                "RSI": round(rsi, 2) if 'rsi' in locals() else None,
+                "MACD": round(macd_now, 2) if 'macd_now' in locals() else None,
+                "Signal": round(signal_now, 2) if 'signal_now' in locals() else None,
+                "Volume": int(vol) if 'vol' in locals() else None,
                 "Alert": alert.strip()
             }
 
