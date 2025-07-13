@@ -49,8 +49,11 @@ for symbol in stocks:
             alert += "📉 RSI Oversold\n"
         if latest['Volume'] > volume_spike_factor * indicators['Volume'].rolling(5).mean().iloc[-1]:
             alert += "🚨 Volume Spike\n"
-        if float(latest['MACD']) > float(latest['Signal']) and float(indicators['MACD'].iloc[-2]) < float(indicators['Signal'].iloc[-2]):
-            alert += "✅ MACD Bullish Crossover\n"
+        if (
+    float(latest['MACD']) > float(latest['Signal']) and
+    float(indicators['MACD'].iloc[-2]) < float(indicators['Signal'].iloc[-2])
+):
+    alert += "✅ MACD Bullish Crossover\\n"
 
         row = {
             "Ticker": symbol,
