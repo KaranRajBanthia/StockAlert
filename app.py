@@ -36,30 +36,38 @@ for symbol in stocks:
     try:
         df = yf.download(symbol, period="3mo", interval="1d", progress=False)
         if df.empty:
+            st.warning(f"No data found for {symbol}")
             continue
 
         indicators = calculate_indicators(df)
-        latest = indicators.iloc[-1]
+        if indicators.empty:
+            st.warning(f"Indicators empty for {symbol}")
+            continue
 
+        latest = indicators.iloc[-1]
         alert = ""
 
         # --- RSI Alerts ---
-        if float(latest['RSI']) > rsi_upper:
+        rsi = float(latest['RSI'])
+        if rsi > rsi_upper:
             alert += "📈 RSI Overbought\n"
-        if float(latest['RSI']) < rsi_lower:
+        elif rsi < rsi_lower:
             alert += "📉 RSI Oversold\n"
 
         # --- Volume Spike ---
         avg_vol = indicators['Volume'].rolling(5).mean().iloc[-1]
-        if float(latest['Volume']) > volume_spike_factor * avg_vol:
+        vol = float(latest['Volume'])
+        if vol > volume_spike_factor * avg_vol:
             alert += "🚨 Volume Spike\n"
 
         # --- MACD Bullish Crossover ---
         try:
-            if (
-                float(latest['MACD']) > float(latest['Signal']) and
-                float(indicators['MACD'].iloc[-2]) < float(indicators['Signal'].iloc[-2])
-            ):
+            macd_now = float(latest['MACD'])
+            macd_prev = float(indicators['MACD'].iloc[-2])
+            signal_now = float(latest['Signal'])
+            signal_prev = float(indicators['Signal'].iloc[-2])
+
+            if macd_now > signal_now and macd_prev < signal_prev:
                 alert += "✅ MACD Bullish Crossover\n"
         except Exception as e:
             st.error(f"MACD logic failed for {symbol}: {e}")
@@ -67,10 +75,10 @@ for symbol in stocks:
         row = {
             "Ticker": symbol,
             "Price": round(float(latest['Close']), 2),
-            "RSI": round(float(latest['RSI']), 2),
-            "MACD": round(float(latest['MACD']), 2),
-            "Signal": round(float(latest['Signal']), 2),
-            "Volume": int(latest['Volume']),
+            "RSI": round(rsi, 2),
+            "MACD": round(macd_now, 2),
+            "Signal": round(signal_now, 2),
+            "Volume": int(vol),
             "Alert": alert.strip()
         }
 
@@ -85,7 +93,7 @@ for symbol in stocks:
 if data:
     st.dataframe(pd.DataFrame(data))
 else:
-    st.warning("No data to display. Check ticker symbols or internet connection.")
+    st.warning("No data to display. Check ticker symbols or connection.")
 
 # --- Send Alerts ---
 if alerts_triggered:
