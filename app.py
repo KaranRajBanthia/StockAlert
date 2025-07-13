@@ -1,5 +1,3 @@
-
-# app.py
 import streamlit as st
 import pandas as pd
 import yfinance as yf
@@ -36,31 +34,42 @@ alerts_triggered = []
 
 for symbol in stocks:
     try:
-        df = yf.download(symbol, period="3mo", interval="1d")
+        df = yf.download(symbol, period="3mo", interval="1d", progress=False)
         if df.empty:
             continue
+
         indicators = calculate_indicators(df)
         latest = indicators.iloc[-1]
 
         alert = ""
-        if latest['RSI'] > rsi_upper:
+
+        # --- RSI Alerts ---
+        if float(latest['RSI']) > rsi_upper:
             alert += "📈 RSI Overbought\n"
-        if latest['RSI'] < rsi_lower:
+        if float(latest['RSI']) < rsi_lower:
             alert += "📉 RSI Oversold\n"
-        if latest['Volume'] > volume_spike_factor * indicators['Volume'].rolling(5).mean().iloc[-1]:
+
+        # --- Volume Spike ---
+        avg_vol = indicators['Volume'].rolling(5).mean().iloc[-1]
+        if float(latest['Volume']) > volume_spike_factor * avg_vol:
             alert += "🚨 Volume Spike\n"
-        if (
-    float(latest['MACD']) > float(latest['Signal']) and
-    float(indicators['MACD'].iloc[-2]) < float(indicators['Signal'].iloc[-2])
-):
-    alert += "✅ MACD Bullish Crossover\\n"
+
+        # --- MACD Bullish Crossover ---
+        try:
+            if (
+                float(latest['MACD']) > float(latest['Signal']) and
+                float(indicators['MACD'].iloc[-2]) < float(indicators['Signal'].iloc[-2])
+            ):
+                alert += "✅ MACD Bullish Crossover\n"
+        except Exception as e:
+            st.error(f"MACD logic failed for {symbol}: {e}")
 
         row = {
             "Ticker": symbol,
-            "Price": latest['Close'],
-            "RSI": round(latest['RSI'], 2),
-            "MACD": round(latest['MACD'], 2),
-            "Signal": round(latest['Signal'], 2),
+            "Price": round(float(latest['Close']), 2),
+            "RSI": round(float(latest['RSI']), 2),
+            "MACD": round(float(latest['MACD']), 2),
+            "Signal": round(float(latest['Signal']), 2),
             "Volume": int(latest['Volume']),
             "Alert": alert.strip()
         }
@@ -73,7 +82,10 @@ for symbol in stocks:
         st.error(f"Error loading {symbol}: {e}")
 
 # --- Display Table ---
-st.dataframe(pd.DataFrame(data))
+if data:
+    st.dataframe(pd.DataFrame(data))
+else:
+    st.warning("No data to display. Check ticker symbols or internet connection.")
 
 # --- Send Alerts ---
 if alerts_triggered:
